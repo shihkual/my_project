@@ -384,7 +384,7 @@ def initialize_kagome_snap(
     guest = job.sp.do_guest
 
     ## build simualtion cell ##
-    if job.sp.initial_state == 'non-dilute':  # only build unit cell for KL
+    if job.sp.initial_state == 'non_dilute':  # only build unit cell for KL
         N = 2
         spacing = 1.001
         length = job.sp.length * spacing
@@ -507,7 +507,7 @@ def initialize_kagome_snap(
         }] * 3
 
     sim.create_state_from_snapshot(snapshot)
-    if job.sp.initial_state == 'non-dilute':
+    if job.sp.initial_state == 'non_dilute':
         sim.state.replicate(job.sp.n_repeats, job.sp.n_repeats, 1)
 
     if device.communicator.rank == 0:
@@ -526,7 +526,7 @@ def initialize_polygons_hpmc(
         sim: 'hoomd.Simulation',
         gsd_period: int,
         thermo_period: int,
-        t_tune_end: int,
+        t_tune_end: list,
         label: str,
         output_mode: str = 'w',
         kT: float = None,
@@ -552,26 +552,55 @@ def initialize_polygons_hpmc(
         aspect_delta = job.doc.aspect_delta
 
         if job.sp.pressure != None:
-            betaP = job.sp.pressure / job.sp.kT
+            betaP = job.sp.pressure / kT
         else:
             raise NotImplementedError(
                 "Intend to do the box MC simulation without providing pressure"
             )
-        boxmc = hoomd.hpmc.update.BoxMC(betaP, trigger=hoomd.trigger.Periodic(10))
-        boxmc_quantities = ['betaP']
+        boxmc = hoomd.hpmc.update.BoxMC(betaP=betaP, trigger=hoomd.trigger.Periodic(10))
+        boxmc_quantities = []#'betaP']
+        boxmc_tune_quantities = []
 
         if boxmc_isotropic:
             boxmc.volume = {'mode': 'ln', 'weight': 1.0, 'delta': volume_delta}
-            boxmc_quantities.append('volume_acceptance')
+            if np.abs(volume_delta - 0.0) > 1e-9:
+                boxmc_tune_quantities.append('volume')
+                boxmc_quantities.append('volume_acceptance')
         else:
             boxmc.length = {'weight': 1.0, 'delta': length_delta}
-            boxmc_quantities.append('volume_acceptance')
+            counting = 0
+            if np.abs(length_delta[0] - 0.0) > 1e-9:
+                boxmc_tune_quantities.append('length_x')
+                counting += 1
+            if np.abs(length_delta[1] - 0.0) > 1e-9:
+                boxmc_tune_quantities.append('length_y')
+                counting += 1
+            if np.abs(length_delta[2] - 0.0) > 1e-9:
+                boxmc_tune_quantities.append('length_z')
+                counting += 1
+            if counting > 0:
+                boxmc_quantities.append('volume_acceptance')
 
         if floppy_box_move:
             boxmc.shear = {'weight': 1.0, 'reduce': 0.0, 'delta': shear_delta}
-            boxmc_quantities.append('shear_acceptance')
+            counting = 0
+            if np.abs(shear_delta[0] - 0.0) > 1e-9:
+                boxmc_tune_quantities.append('shear_x')
+                counting += 1
+            if np.abs(shear_delta[1] - 0.0) > 1e-9:
+                boxmc_tune_quantities.append('shear_y')
+                counting += 1
+            if np.abs(shear_delta[2] - 0.0) > 1e-9:
+                boxmc_tune_quantities.append('shear_z')
+                counting += 1
+            if counting > 0:
+                boxmc_quantities.append('shear_acceptance')
             boxmc.aspect = {'weight': 1.0, 'delta': aspect_delta}
-            boxmc_quantities.append('aspect_acceptance')
+            if np.abs(aspect_delta - 0.0) > 1e-9:
+                boxmc_tune_quantities.append('aspect')
+                boxmc_quantities.append('aspect_acceptance')
+        
+        print("Tune the BoxMC trial move size, including", boxmc_tune_quantities)
         sim.operations.updaters.append(boxmc)
 
     if patchy:
@@ -579,11 +608,10 @@ def initialize_polygons_hpmc(
         mc.pair_potential = patchy_interaction
 
     sim.run(0)
-    
     if do_boxmc:
-        editor = Editor(job, sim, mc, label, gsd_period, thermo_period, box_mc=boxmc)
+        editor = Editor(job, sim, mc, label, gsd_period, thermo_period, boxmc=boxmc)
         boxmc_writer = editor.get_boxmc_logger(loggable_quantities=boxmc_quantities, mode=output_mode)
-        sim.operation.writers.append(boxmc_writer)
+        sim.operations.writers.append(boxmc_writer)
     else:
         editor = Editor(job, sim, mc, label, gsd_period, thermo_period)
     gsd_writer = editor.get_gsd_logger()
@@ -604,18 +632,18 @@ def initialize_polygons_hpmc(
         max_rotation_move=np.pi/3,
         trigger=hoomd.trigger.And([
             hoomd.trigger.Periodic(100),
-            hoomd.trigger.Before(t_tune_end)
+            hoomd.trigger.Before(t_tune_end[0])
         ])
     )
     sim.operations.tuners.append(tune)
     if do_boxmc:
         box_tune = hoomd.hpmc.tune.BoxMCMoveSize.scale_solver(
             boxmc=boxmc,
-            moves=['volume', 'length_{x, y}', 'shear_{x, y}', 'aspect'],
+            moves=boxmc_tune_quantities,
             target=0.33,
             trigger=hoomd.trigger.And([
                 hoomd.trigger.Periodic(100),
-                hoomd.trigger.Before(t_tune_end)
+                hoomd.trigger.Before(t_tune_end[1])
             ])
         )
         sim.operations.tuners.append(box_tune)
@@ -701,20 +729,22 @@ def deformation_run(
         t_end: int,
         run_walltime: float,
         t_block: int = None,
-        axis: int = 0
+        axis: int = 0,
+        buffer_time: int = 100_000
 ) -> 'hoomd.Simulation':
+    t_actual_end = t_end + buffer_time
     if t_block is None:
-        t_block = t_end
+        t_block = t_actual_end
     shape_logger = Editor.get_shape_logger(sim.operations.integrator)
     device = sim.device
-    compressor = get_deformation_compressor(sim, job, compress_period=t_block, axis=axis)
-    sim.operations.updaters.append(compressor)
+    deformator = get_box_deformator(sim, job, t_end, axis=axis, buffer_time=buffer_time)
+    sim.operations.updaters.append(deformator)
     current_walltime = 0
     try:
         # Loop until the simulation reaches the target hpmc sweeps.
-        while sim.timestep < t_end:
+        while sim.timestep < t_actual_end:
             # Run the simulation with t_block sweeps
-            sim.run(min(t_block, t_end - sim.timestep))
+            sim.run(min(t_block, t_actual_end - sim.timestep))
             current_walltime += sim.walltime
             #  Write the state of the system to a restart file
             if device.communicator.rank == 0:
@@ -742,10 +772,11 @@ def deformation_run(
 
         if device.communicator.rank == 0:
             print(
-                f'{job.id} ended on steps {sim.timestep} '
+                f'{job.id} finish deformation on steps {sim.timestep} '
                 f'after {current_walltime} seconds'
             )
-    del compressor
+    del deformator
+    sim.operations.updaters.pop(-1)
     return sim
 
 def annealing_run(
@@ -936,23 +967,32 @@ def get_compressor(simulation: "hoomd.Simulation", job: signac.contrib.job.Job, 
         min_scale=scale
     )
 
-def get_deformation_compressor(
+def get_box_deformator(
         simulation: "hoomd.Simulation",
         job: signac.contrib.job.Job,
-        compress_period: int,
-        axis: int
+        t_end: int,
+        axis: int,
+        buffer_time: int=100_000
 ):
     initial_box = simulation.state.box
     final_box = hoomd.Box.from_box(initial_box)
     scaling_factor = np.ones(3)
     scaling_factor[axis] = scaling_factor[axis] + job.sp.strain
     final_box.L = np.array([initial_box.Lx, initial_box.Ly, initial_box.Lz]) * scaling_factor
-    divide_compress_freq = int(compress_period / 10)
-    scale = job.doc.scale
-    return hoomd.hpmc.update.QuickCompress(
-        trigger=hoomd.trigger.Periodic(divide_compress_freq),
-        target_box=final_box,
-        min_scale=scale
+    return hoomd.update.BoxResize(
+        trigger=hoomd.trigger.And([
+            hoomd.trigger.Periodic(100),
+            hoomd.trigger.Before(simulation.timestep + buffer_time + t_end)
+        ]),
+        box1=initial_box,
+        box2=final_box,
+        variant=hoomd.variant.Ramp(
+                A=1,
+                B=scaling_factor[axis],
+                t_start=buffer_time, 
+                t_ramp=t_end
+        ),
+        filter=hoomd.filter.All()
     )
 
 def get_patchy_polygons_configuration(
