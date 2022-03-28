@@ -21,7 +21,7 @@ def timestep_label(job):
     else:
         ts_str = np.format_float_scientific(get_step(job, 'sampling'), precision=1,
                 sign=False, exp_digits=1).replace('+', '')
-        sa_str = np.format_float_scientific(job.doc['stop_after'], precision=1,
+        sa_str = np.format_float_scientific(job.doc['sampling_end'], precision=1,
                 sign=False, exp_digits=1).replace('+', '')
         return 'step: {} -> {}'.format(ts_str, sa_str)
 
