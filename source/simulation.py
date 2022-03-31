@@ -141,10 +141,6 @@ class Editor:
             else:
                 return accept_moves / total_moves
 
-        @property
-        def box_betaP(self):
-            return self.box_mc.betaP.value
-
     @staticmethod
     def get_shape_logger(mc: "hoomd.hpmc.integrate.HPMCIntegrator"):
         logger = hoomd.logging.Logger()
@@ -600,7 +596,8 @@ def initialize_polygons_hpmc(
                 boxmc_tune_quantities.append('aspect')
                 boxmc_quantities.append('aspect_acceptance')
         
-        print("Tune the BoxMC trial move size, including", boxmc_tune_quantities)
+        if sim.device.communicator.rank == 0:
+            print("Tune the BoxMC trial move size, including", boxmc_tune_quantities)
         sim.operations.updaters.append(boxmc)
 
     if patchy:

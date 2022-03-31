@@ -207,7 +207,7 @@ def measure_poisson(job):
         label='eq'
     )
     
-    t_deform_end = int(1_000_000 * job.sp.strain / 0.01)
+    t_deform_end = int(1_000_000 * np.abs(job.sp.strain / 0.01))
     # 2. Initialize simualtion for self-assembly run
     sim = simulation.initialize_polygons_hpmc(
         job=job,
