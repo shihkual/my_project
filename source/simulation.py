@@ -987,8 +987,8 @@ def get_box_deformator(
         box1=initial_box,
         box2=final_box,
         variant=hoomd.variant.Ramp(
-                A=1,
-                B=scaling_factor[axis],
+                A=0,
+                B=1,
                 t_start=buffer_time, 
                 t_ramp=t_end
         ),
