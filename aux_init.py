@@ -42,7 +42,7 @@ def main():
             'kagome_theta': arg1,
             'patch_theta': patch_theta,
             'do_guest': do_guest,
-            'guest_rescaling_factor': guest_rescaling_factor
+            'guest_rescaling_factor': guest_rescaling_factor,
             'strain': strain
         }
         job = project.open_job(sp).init()
