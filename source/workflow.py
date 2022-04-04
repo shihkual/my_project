@@ -25,7 +25,7 @@ def sim_gpu_directives(walltime: float = 0.5, n_gpu: int = 1, job_workspace_pare
                     )
         directives = {
             "executable": f"module purge" +
-                          f"\nmodule load slurm gpu singularitypro openmpi/4.0.4" +
+                          f"\nmodule load slurm gpu singularitypro openmpi/4.0.4-nocuda" +
                           f"\n{mpirun_str} singularity exec --nv --bind {job_workspace_parent} /$HOME/hoomd_container/software_gpu.sif python3",
             "np": int(divmod(n_gpu, 4.001)[0] + 1),
             "ngpu": n_gpu,
