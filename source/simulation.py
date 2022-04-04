@@ -945,6 +945,7 @@ def get_compressor(simulation: "hoomd.Simulation", job: signac.contrib.job.Job, 
             n_temp = sum(snapshot.particles.typeid == types)
             N_types[p] = n_temp
         job.doc.N_types = N_types
+    N_types = job.doc.N_types
     A_particles = 0
     for ptype, count in N_types.items():
         if ptype != 'guest':
