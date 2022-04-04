@@ -4,15 +4,14 @@ import flow
 simulation_group = Project.make_group(name='embeded_sim')
 
 def sim_gpu_directives(walltime: float = 0.5, n_gpu: int = 1, job_workspace_parent: str = 'None'):
+    mpiexec_arg = f'mpiexec -n {n_gpu}'
     hostname_pattern = flow.environment.get_environment().hostname_pattern
-    mpirun_str = f'mpirun -n {n_gpu}'
     if hostname_pattern  == '.*\\.bridges2\\.psc\\.edu$':
         # Bridges 2
         directives = {
-            "executable": f"module purge" +
-                          f"\nmodule load openmpi/4.0.5-gcc10.2.0" +
-                          f"\n{mpirun_str} singularity exec --nv /$HOME/hoomd_container/software.sif python3",
-            "np": int(divmod(n_gpu, 8.001)[0] + 1),
+            "executable": f"module load openmpi/4.0.5-gcc10.2.0" +
+                          f"\n{mpiexec_arg} singularity exec --nv /$HOME/hoomd_container/software.sif python3",
+            "nranks": n_gpu,
             "ngpu": n_gpu,
             "walltime": walltime
         }
@@ -24,10 +23,9 @@ def sim_gpu_directives(walltime: float = 0.5, n_gpu: int = 1, job_workspace_pare
                     "Now Expanse requires user to specify the project directory to run in a container. Maybe fixed in the future"
                     )
         directives = {
-            "executable": f"module purge" +
-                          f"\nmodule load slurm gpu singularitypro openmpi/4.0.4-nocuda" +
-                          f"\n{mpirun_str} singularity exec --nv --bind {job_workspace_parent} /$HOME/hoomd_container/software_gpu.sif python3",
-            "np": int(divmod(n_gpu, 4.001)[0] + 1),
+            "executable": f"module load slurm gpu singularitypro openmpi/4.0.4-nocuda" +
+                          f"\n{mpiexec_arg} singularity exec --nv --bind {job_workspace_parent} /$HOME/hoomd_container/software_gpu.sif python3",
+            "nranks": n_gpu,
             "ngpu": n_gpu,
             "walltime": walltime
         }
@@ -36,10 +34,10 @@ def sim_gpu_directives(walltime: float = 0.5, n_gpu: int = 1, job_workspace_pare
 
         # Greatlakes
         directives = {
-            "executable": f"module purge"
-                          f"\nmodule load gcc/8.2.0 openmpi/4.0.2 singularity" +
-                          f"\n{mpirun_str} singularity exec --nv /$HOME/hoomd_container/software.sif python",
-            "ngpu": 1,
+            "executable": f"module load gcc/8.2.0 openmpi/4.0.2 singularity" +
+                          f"\n{mpiexec_arg} singularity exec --nv /$HOME/hoomd_container/software.sif python",
+            "nranks": n_gpu,
+            "ngpu": n_gpu,
             "walltime": walltime
         }
     else:
@@ -48,14 +46,13 @@ def sim_gpu_directives(walltime: float = 0.5, n_gpu: int = 1, job_workspace_pare
     return directives
 
 def sim_cpu_directives(walltime: float = 0.5, n_cpu: int = 1, job_workspace_parent: str = 'None'):
+    mpiexec_arg = f'mpiexec -n {n_cpu}'
     hostname_pattern = flow.environment.get_environment().hostname_pattern
-    mpirun_str = f'mpirun -n {n_cpu}'
     if hostname_pattern  == '.*\\.bridges2\\.psc\\.edu$':
         # Bridges 2
         directives = {
-            "executable": f"module purge" +
-                          f"\nmodule load openmpi/4.0.5-gcc10.2.0" +
-                          f"\nsingularity exec /$HOME/hoomd_container/software.sif python3",
+            "executable": f"module load openmpi/4.0.5-gcc10.2.0" +
+                          f"\n{mpiexec_arg} singularity exec /$HOME/hoomd_container/software.sif python3",
             "nranks": n_cpu,
             "walltime": walltime
         }
@@ -67,9 +64,8 @@ def sim_cpu_directives(walltime: float = 0.5, n_cpu: int = 1, job_workspace_pare
                     "Now Expanse requires user to specify the project directory to run in a container. Maybe fixed in the future"
                     )
         directives = {
-            "executable": f"module purge" +
-                          f"\nmodule load slurm cpu singularitypro gcc/9.2.0 openmpi/4.1.1" +
-                          f"\n{mpirun_str} singularity exec --bind {job_workspace_parent} /$HOME/hoomd_container/software.sif python3",
+            "executable": f"module load slurm cpu singularitypro gcc/9.2.0 openmpi/4.1.1" +
+                          f"\n{mpiexec_arg} singularity exec --bind {job_workspace_parent} /$HOME/hoomd_container/software.sif python3",
             "nranks": n_cpu,
             "walltime": walltime
         }
@@ -78,9 +74,8 @@ def sim_cpu_directives(walltime: float = 0.5, n_cpu: int = 1, job_workspace_pare
 
         # Greatlakes
         directives = {
-            "executable": f"module purge"
-                          f"\nmodule load gcc/8.2.0 openmpi/4.0.2 singularity" +
-                          f"\n singularity exec /$HOME/hoomd_container/software.sif python",
+            "executable": f"module load gcc/8.2.0 openmpi/4.0.2 singularity" +
+                          f"\n{mpiexec_arg} singularity exec /$HOME/hoomd_container/software.sif python",
             "nranks": n_cpu,
             "walltime": walltime
         }
