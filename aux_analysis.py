@@ -14,6 +14,7 @@ import os
 freud.parallel.set_num_threads(8)
 LABEL = 'sampling'
 TRAJECTORY_FN = f"{LABEL}_trajectory.gsd"
+PLOT_BOX_QUERY = ['lx', 'ly']
 START_FRAME = 0
 DISPLAY_FRAMES = 200
 K_ATIC = [3]
@@ -22,7 +23,7 @@ def get_frame_and_katic(job):
     trajectory = gsd.hoomd.open(job.fn(TRAJECTORY_FN))
     N_frame = len(trajectory)
 
-    chosen_frames = np.round(np.linspace(START_FRAME, N_frame, DISPLAY_FRAMES)).astype(int).tolist()
+    chosen_frames = np.round(np.linspace(START_FRAME, N_frame-1, DISPLAY_FRAMES)).astype(int).tolist()
     k_atic = K_ATIC
     return chosen_frames, k_atic
 
@@ -39,9 +40,11 @@ class Project(flow.FlowProject):
 def plot_potential(job):
     plt.style.use('ggplot')
     plt.ioff()
+    plot_box = False
 
     data = np.genfromtxt(job.fn(f'{LABEL}_hpmc_potential.txt'), dtype=float, skip_header=1)
     data = data[~np.isnan(data).any(axis=1), :]
+    timesteps = np.linspace(0, (data.shape[0]-1)*job.doc.thermo_period, data.shape[0])
     df_potential = pd.DataFrame(data, columns=['timestep', 'V'])
 
     data = np.genfromtxt(job.fn(f'{LABEL}_box.txt'), dtype=float, skip_header=1)
@@ -50,7 +53,7 @@ def plot_potential(job):
 
     fig, ax = plt.subplots(figsize=(16, 8))
     ax.plot(
-        df_potential['timestep'],
+        timesteps,
         df_potential['V'],
         marker='o',
         linestyle='dashed',
@@ -61,18 +64,20 @@ def plot_potential(job):
     plt.xticks(fontsize=20)
     ax.set_ylabel('Potential energy', fontsize=25, color='r')
     plt.yticks(fontsize=20)
+    
+    if plot_box:
+        ax2 = ax.twinx()
+        ax2.plot(
+            df_potential['timestep'],
+            df_volume['volume'],
+            marker='o',
+            linestyle='dashed',
+            linewidth=3,
+            color='b'
+        )
+        ax2.set_ylabel('Box volume', fontsize=25, color='b')   
+        plt.yticks(fontsize=20)
 
-    ax2 = ax.twinx()
-    ax2.plot(
-        df_potential['timestep'],
-        df_volume['volume'],
-        marker='o',
-        linestyle='dashed',
-        linewidth=3,
-        color='b'
-    )
-    ax2.set_ylabel('Box volume', fontsize=25, color='b')
-    plt.yticks(fontsize=20)
     plt.savefig(job.fn("potential.png"), dpi=500)
     return
 
@@ -85,20 +90,17 @@ def plot_box(job):
     plt.style.use('ggplot')
     plt.ioff()
 
-    data = np.genfromtxt(job.fn(f'{LABEL}_hpmc_potential.txt'), dtype=float, skip_header=1)
-    data = data[~np.isnan(data).any(axis=1), :]
-    df_potential = pd.DataFrame(data[:, 0], columns=['timestep'])
-
     data = np.genfromtxt(job.fn(f'{LABEL}_box.txt'), dtype=float, skip_header=1)
     data = data[~np.isnan(data).any(axis=1), :]
+    timesteps = np.linspace(0, (data.shape[0]-1)*job.doc.thermo_period, data.shape[0])
     data[:, 1] = (data[:, 1] - data[0, 1]) / data[0, 1] * 100
     data[:, 2] = (data[:, 2] - data[0, 2]) / data[0, 2] * 100
     df_volume = pd.DataFrame(data, columns=['volume', 'lx', 'ly', 'lz', 'xy'])
 
     fig, ax = plt.subplots(figsize=(16, 8))
     ax.plot(
-        df_potential['timestep'],
-        df_volume['lx'],
+        timesteps,
+        df_volume[PLOT_BOX_QUERY[0]],
         marker='o',
         linestyle='dashed',
         linewidth=2,
@@ -112,8 +114,8 @@ def plot_box(job):
 
     ax2 = ax.twinx()
     ax2.plot(
-        df_potential['timestep'],
-        df_volume['ly'],
+        timesteps,
+        df_volume[PLOT_BOX_QUERY[1]],
         marker='o',
         linestyle='dashed',
         linewidth=2,
@@ -123,7 +125,7 @@ def plot_box(job):
     ax2.set_ylabel('Ly strain (%)', fontsize=25, color='b')
     plt.yticks(fontsize=20)
 
-    if job.sp.lx_strain > 0:
+    if job.sp.strain > 0:
         ax.set_ylim([-0.5, job.sp.strain * 100 + 0.5])
         ax2.set_ylim([-0.5, job.sp.strain * 100 + 0.5])
     else:
@@ -131,7 +133,6 @@ def plot_box(job):
         ax2.set_ylim([job.sp.strain * 100 - 0.5, 0.5])
     plt.savefig(job.fn("box_geometry.png"), dpi=500)
     return
-
 
 @Project.operation
 @Project.pre.isfile(f'{LABEL}_hpmc_potential.txt')
@@ -149,9 +150,7 @@ def plot_kagome_angle(job):
 
     traj = gsd.hoomd.open(job.fn(TRAJECTORY_FN))
     chosen_frame, _ = get_frame_and_katic(job)
-    data = np.genfromtxt(job.fn('hpmc_potential.txt'), dtype=float, skip_header=1)
-    data = data[~np.isnan(data).any(axis=1), :]
-    time_step = data[:, 0]
+    timesteps = np.linspace(0, (len(traj) - 1)*job.doc.thermo_period, len(traj))
     kagome_angle_mean = []
     kagome_angle_std = []
 
@@ -163,14 +162,13 @@ def plot_kagome_angle(job):
 
     plt.figure(figsize=(16, 8))
     plt.errorbar(
-        x=time_step[chosen_frame],
+        x=timesteps[chosen_frame],
         y=kagome_angle_mean,
         yerr=kagome_angle_std,
         fmt='o--',
         elinewidth=1,
         capsize=5
     )
-    # plt.errorbar(x=time_step[N_frame], y=kagome_angle_mean, fmt='o--')
     plt.xticks(fontsize=20)
     plt.xlabel('HPMC sweeps', fontsize=25)
     plt.yticks(fontsize=20)
@@ -228,17 +226,18 @@ def voro_diagram(job):
         interval=500,
         repeat=False
     )
-    ani.save('voro.mp4', fps=2, dpi=300)
+    ani.save('voro.mp4', fps=int(DISPLAY_FRAMES/10), dpi=100)
 
 @Project.operation
 @Project.pre.isfile(TRAJECTORY_FN)
 # @Project.post.isfile('mean_katic.png')
-@directives(walltime=1)
+@directives(walltime=0.5)
 def plot_average_katic(job):
     trajectory = gsd.hoomd.open(job.fn(TRAJECTORY_FN))
     chosen_frame, k_atic = get_frame_and_katic(job)
     averaged_katics = []
 
+    timesteps = np.linspace(0, (len(trajectory)-1)*job.doc.thermo_period, len(trajectory))
     for i in chosen_frame:
         for k in k_atic:
             frame = trajectory[i]
@@ -253,20 +252,21 @@ def plot_average_katic(job):
             order = np.absolute(psi.particle_order)
             averaged_katics.append(np.mean(order))
 
-    plt.figure()
+    plt.style.use('seaborn')
+    plt.figure(figsize=(12, 8))
     plt.plot(
-        chosen_frame,
+        timesteps[chosen_frame],
         averaged_katics,
         marker='o',
         linestyle='dashed',
         linewidth=2,
-        markersize=3,
+        markersize=8,
     )
     plt.xlabel('HPMC sweeps', fontsize=25)
     plt.xticks(fontsize=20)
     plt.ylabel(fr"$\psi'_{3}$", fontsize=25)
     plt.yticks(fontsize=20)
-    plt.savefig(job.fn("mean_katic.png"), dpi=500)
+    plt.savefig("mean_katic.png", dpi=100)
 
 def compute_kagome_angle(job, frame):
     import freud
