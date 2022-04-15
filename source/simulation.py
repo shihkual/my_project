@@ -301,7 +301,7 @@ class Seed:
 
         overlap_with_seed_idx = self.find_overlap_idx(
             target_position,
-            ConvexHull(1.02 * vertices_per_particles[:, :2])
+            ConvexHull(1.05 * vertices_per_particles[:, :2])
         )
 
         overlap_with_seed_filter = np.ones(target_position.shape[0]).astype(bool)
@@ -786,7 +786,7 @@ def annealing_run(
         temp_end: float,
         binary: bool = False,
         t_block: int = None
-) -> None:
+) -> 'hoomd.Simulation':
     shape_logger = Editor.get_shape_logger(sim.operations.integrator)
     device = sim.device
     temperature_ramp = hoomd.variant.Ramp(
@@ -848,9 +848,10 @@ def annealing_run(
 
         if device.communicator.rank == 0:
             print(
-                f'{job.id} ended on steps {sim.timestep} '
+                f'T ramp run ended on steps {sim.timestep} '
                 f'after {current_walltime} seconds'
             )
+        return sim
 
 def restartable_run(
         job: 'signac.contrib.job.Job',
@@ -1019,9 +1020,10 @@ def get_patchy_polygons_configuration(
 def get_seeded_snap(
         job: 'signac.contrib.job.Job',
         previous_snap: 'hoomd.Simulation',
-        label: str
+        label: str,
+        seed_fn: str = 'source/seed.gsd'
 ) -> 'hoomd.Simulation':
-    seeded_snap = Seed('source/seed.gsd', job).implant_seed(previous_snap)
+    seeded_snap = Seed(seed_fn, job).implant_seed(previous_snap)
     with gsd.hoomd.open(name=job.fn(f'{label}_restart.gsd'), mode='wb') as f:
         f.append(seeded_snap)
     with gsd.hoomd.open(name=job.fn(f'{label}_trajectory.gsd'), mode='wb') as f:

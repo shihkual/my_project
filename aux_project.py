@@ -120,7 +120,6 @@ def temp_ramp(job):
         kT=job.sp.kT_init,
         binary=True,
         patchy=True,
-        do_boxmc=True
     )
 
     # 3. Compress the system to target density
@@ -196,7 +195,6 @@ def measure_poisson(job):
     job.doc.shear_delta = (1e-6, 0.0, 0.0)
     job.doc.aspect_delta = 0.0
     job.doc.length_delta = (0, 1e-6, 0)
-    job.doc.stop_after = 20_000_000
     device = hoomd.device.GPU()
     sim = hoomd.Simulation(device=device, seed=job.sp.seed)
     label = 'sampling'
@@ -214,7 +212,7 @@ def measure_poisson(job):
         sim=sim,
         gsd_period=job.doc.gsd_period,
         thermo_period=job.doc.thermo_period,
-        t_tune_end=[t_deform_end + 2_000_000, t_deform_end + 4_000_000],
+        t_tune_end=[t_deform_end + 2_000_000, t_deform_end + 6_000_000],
         label=label,
         kT=job.sp.kT_end,
         binary=True,
@@ -270,7 +268,7 @@ def run_simulation(job):
         sim=sim,
         gsd_period=job.doc.gsd_period,
         thermo_period=job.doc.thermo_period,
-        t_tune_end=[job.doc.n_tune_steps, job.doc.n_tune_steps*2],
+        t_tune_end=[job.doc.n_tune_steps, job.doc.n_tune_steps*3],
         label=label,
         kT=job.sp.kT_end,
         binary=True,
@@ -290,5 +288,52 @@ def run_simulation(job):
     job.doc[f'{label}_done'] = True
     return
 
+@workflow.simulation_group
+@Project.operation.with_directives(
+    workflow.sim_gpu_directives(walltime=24, n_gpu=1, job_workspace_parent=pr.root_directory()))
+@Project.pre.after(equilibrium)
+@Project.post(labels.sampling_complete)
+def restart(job):
+    from source import simulation
+    import hoomd
+
+    # 1. Use gpu
+    device = hoomd.device.CPU()
+    sim = hoomd.Simulation(device=device, seed=job.sp.seed)
+    label = 'sampling'
+
+    sim = simulation.restart_sim(
+        job=job,
+        sim=sim,
+        label='none',
+        base_file=f'{label}_trajectory.gsd'
+    )
+    
+    # 2. Initialize simualtion for self-assembly run
+    sim = simulation.initialize_polygons_hpmc(
+        job=job,
+        sim=sim,
+        gsd_period=job.doc.gsd_period,
+        thermo_period=job.doc.thermo_period,
+        t_tune_end=[sim.timestep+job.doc.n_tune_steps, sim.timestep+job.doc.n_tune_steps * 3],
+        label=label,
+        kT=job.sp.kT_end,
+        binary=True,
+        patchy=True,
+        do_boxmc=True,
+        boxmc_isotropic=False,
+        output_mode='a'
+    )
+    
+    simulation.restartable_run(
+        job=job,
+        sim=sim,
+        label=label,
+        t_end=job.doc[f'{label}_end'],
+        run_walltime=24 * 3600,  # s
+        t_block=job.doc.n_run_steps
+    )
+    job.doc[f'{label}_done'] = True
+    return
 if __name__ == "__main__":
     Project().main()
