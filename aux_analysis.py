@@ -191,8 +191,9 @@ def voro_diagram(job):
         ax.cla()
         chosen_frame, k_atic = get_frame_and_katic(job)
         frame = trajectory[chosen_frame[i]]
+        host_idx = np.where(frame.particles.typeid != 2)
         box = freud.box.Box.from_box(frame.configuration.box)
-        position = frame.particles.position
+        position = frame.particles.position[host_idx]
         system = (box, position)
 
         voro = freud.locality.Voronoi()
@@ -241,8 +242,9 @@ def plot_average_katic(job):
     for i in chosen_frame:
         for k in k_atic:
             frame = trajectory[i]
+            host_idx = np.where(frame.particles.typeid != 2)
             box = freud.box.Box.from_box(frame.configuration.box)
-            position = frame.particles.position
+            position = frame.particles.position[host_idx]
             system = (box, position)
 
             voro = freud.locality.Voronoi()
