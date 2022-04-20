@@ -1,7 +1,8 @@
 import gsd.hoomd
 import numpy as np
 import signac
-
+import flow
+from flow import directives
 import freud
 from matplotlib.ticker import ScalarFormatter
 import os
@@ -10,7 +11,7 @@ freud.parallel.set_num_threads(8)
 LABEL = 'sampling'
 TRAJECTORY_FN = f"{LABEL}_trajectory.gsd"
 START_FRAME = 0
-DISPLAY_FRAMES = 10
+DISPLAY_FRAMES = 200
 K_ATIC = [3]
 
 def get_frame_and_katic(job):
@@ -29,11 +30,12 @@ class Project(flow.FlowProject):
 @Project.operation
 @Project.pre.isfile(TRAJECTORY_FN)
 @directives(walltime=12)
+@directives(memory='4G')
 def render_with_katic(job):
     import rowan
     import fresnel
     import matplotlib.pyplot as plt
-    import matplotlib.colors as colors
+    import matplotlib.colors as clrs
     from matplotlib import cm
     from matplotlib.animation import FuncAnimation
     from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -44,6 +46,7 @@ def render_with_katic(job):
 
     timesteps = np.linspace(0, (len(trajectory)-1)*job.doc.thermo_period, len(trajectory))
     def plot(i):
+        ax.cla()
         for k in k_atic:
             frame = trajectory[chosen_frame[i]]
             box = freud.box.Box.from_box(frame.configuration.box)
@@ -65,7 +68,7 @@ def render_with_katic(job):
 
             colors = np.empty((N, 3))
             # Color by typeid
-            colors[host_idx] = cm.Viridis(order)
+            colors[host_idx] = cm.viridis(order)[:, :3]
             colors[guest_idx] = fresnel.color.linear([0.0, 0.0, 1.0])
 
             scene = fresnel.Scene()
@@ -89,11 +92,11 @@ def render_with_katic(job):
             fresnel.geometry.Box(scene, box, box_radius=.07)
 
             scene.camera = fresnel.camera.Orthographic.fit(scene)
-            out = fresnel.pathtrace(scene, w=1800, h=1000, light_samples=5)
+            out = fresnel.pathtrace(scene, w=2700, h=1500, light_samples=5)
             ax.imshow(out[:], interpolation='lanczos')
 
-            norm = colors.Normalize(vmin=0, vmax=1)
-            sm = plt.cm.ScalarMappable(cmap=cm.Viridis, norm=norm)
+            norm = clrs.Normalize(vmin=0, vmax=1)
+            sm = plt.cm.ScalarMappable(cmap=cm.viridis, norm=norm)
             divider = make_axes_locatable(ax)
             cax = divider.append_axes("right", size="5%")
             fig.colorbar(sm, cax=cax).set_label(fr"$|\psi'_{k}|$")
@@ -108,7 +111,7 @@ def render_with_katic(job):
         interval=500,
         repeat=False
     )
-    ani.save('traj_movie.mp4', fps=int(DISPLAY_FRAMES / 10), dpi=100)
+    ani.save('traj_movie.mp4', fps=int(DISPLAY_FRAMES / 10), dpi=300)
 
 if __name__ == "__main__":
     Project().main()
