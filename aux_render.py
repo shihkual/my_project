@@ -1,11 +1,10 @@
 import gsd.hoomd
 import numpy as np
 import signac
+import os
+
 import flow
 from flow import directives
-import freud
-from matplotlib.ticker import ScalarFormatter
-import os
 
 freud.parallel.set_num_threads(8)
 LABEL = 'sampling'
@@ -31,8 +30,75 @@ class Project(flow.FlowProject):
 @Project.pre.isfile(TRAJECTORY_FN)
 @directives(walltime=12)
 @directives(memory='4G')
+def render(job):
+    import rowan
+    import fresnel
+    import matplotlib.pyplot as plt
+    import freud
+
+    plt.ioff()
+    trajectory = gsd.hoomd.open(job.fn(TRAJECTORY_FN))
+    chosen_frame, _ = get_frame_and_katic(job)
+
+    def plot(i):
+        ax.cla()
+        frame = trajectory[chosen_frame[i]]
+        box = freud.box.Box.from_box(frame.configuration.box)
+        particle_types = frame.particles.typeid
+
+        N = frame.particles.N
+        orientation = frame.particles.orientation
+        orientation = rowan.to_axis_angle(orientation)
+        radian_orientation = orientation[0][:, 2] * orientation[1]
+
+        colors = np.empty((N, 3))
+        # Color by typeid
+        colors[particle_types == 0] = fresnel.color.linear([.95, .2, .2])
+        colors[particle_types == 1] = fresnel.color.linear([0.05, .95, .95])
+        colors[particle_types == 2] = fresnel.color.linear([1, 1, 1])
+
+        scene = fresnel.Scene()
+        scene.background_color = fresnel.color.linear([0.75, 0.75, 0.75])
+        # Spheres for every particle in the system
+        geometry = fresnel.geometry.Polygon(
+            scene,
+            N=N,
+            vertices=frame.particles.type_shapes[0]['vertices']
+        )
+        geometry.position[:] = frame.particles.position[:, :2]
+        geometry.angle[:] = radian_orientation
+        geometry.material = fresnel.material.Material(specular=0.5, roughness=0.9)
+        # geometry.outline_width = 0.05
+
+        # use color instead of material.color
+        geometry.material.primitive_color_mix = 1.0
+        geometry.color[:] = fresnel.color.linear(colors)
+
+        # create box in fresnel
+        fresnel.geometry.Box(scene, box, box_radius=.07)
+
+        scene.camera = fresnel.camera.Orthographic.fit(scene)
+        out = fresnel.pathtrace(scene, w=2700, h=1500, light_samples=5)
+        ax.imshow(out[:], interpolation='lanczos')
+        ax.axis('off')
+
+    fig, ax = plt.subplots(1, 1, figsize=(9, 5))
+    ani = FuncAnimation(
+        fig,
+        plot,
+        frames=len(chosen_frame),
+        interval=500,
+        repeat=False
+    )
+    ani.save(job.fn('traj_movie.mp4'), fps=int(DISPLAY_FRAMES / 10), dpi=300)
+
+@Project.operation
+@Project.pre.isfile(TRAJECTORY_FN)
+@directives(walltime=12)
+@directives(memory='4G')
 def render_with_katic(job):
     import rowan
+    import freud
     import fresnel
     import matplotlib.pyplot as plt
     import matplotlib.colors as clrs
@@ -44,7 +110,6 @@ def render_with_katic(job):
     trajectory = gsd.hoomd.open(job.fn(TRAJECTORY_FN))
     chosen_frame, k_atic = get_frame_and_katic(job)
 
-    timesteps = np.linspace(0, (len(trajectory)-1)*job.doc.thermo_period, len(trajectory))
     def plot(i):
         ax.cla()
         for k in k_atic:
@@ -111,7 +176,7 @@ def render_with_katic(job):
         interval=500,
         repeat=False
     )
-    ani.save('traj_movie.mp4', fps=int(DISPLAY_FRAMES / 10), dpi=300)
+    ani.save(job.fn('traj_katic_movie.mp4'), fps=int(DISPLAY_FRAMES / 10), dpi=300)
 
 if __name__ == "__main__":
     Project().main()
