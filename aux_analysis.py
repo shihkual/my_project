@@ -41,6 +41,7 @@ def plot_potential(job):
     plt.style.use('ggplot')
     plt.ioff()
     plot_box = False
+    plot_temp = False
 
     data = np.genfromtxt(job.fn(f'{LABEL}_hpmc_potential.txt'), dtype=float, skip_header=1)
     data = data[~np.isnan(data).any(axis=1), :]
@@ -76,6 +77,25 @@ def plot_potential(job):
             color='b'
         )
         ax2.set_ylabel('Box volume', fontsize=25, color='b')   
+        plt.yticks(fontsize=20)
+    if plot_temp:
+        temperature_ramp = hoomd.variant.Ramp(
+            A=job.sp.kT_init,
+            B=job.sp.kT_end,
+            t_start=int(job.doc.tramp_end*0.05),
+            t_ramp=int(job.doc.tramp_end*0.95)
+        )
+        temperature = [temperature_ramp(i) for i in timesteps]
+        ax2 = ax.twinx()
+        ax2.plot(
+            timesteps,
+            temperature,
+            marker='o',
+            linestyle='dashed',
+            linewidth=3,
+            color='b'
+        )
+        ax2.set_ylabel('Temperature', fontsize=25, color='b')   
         plt.yticks(fontsize=20)
 
     plt.savefig(job.fn("potential.png"), dpi=500)
@@ -150,7 +170,7 @@ def plot_kagome_angle(job):
 
     traj = gsd.hoomd.open(job.fn(TRAJECTORY_FN))
     chosen_frame, _ = get_frame_and_katic(job)
-    timesteps = np.linspace(0, (len(traj) - 1)*job.doc.thermo_period, len(traj))
+    timesteps = np.linspace(0, (len(traj) - 1)*job.doc.gsd_period, len(traj))
     kagome_angle_mean = []
     kagome_angle_std = []
 
@@ -172,7 +192,7 @@ def plot_kagome_angle(job):
     plt.xticks(fontsize=20)
     plt.xlabel('HPMC sweeps', fontsize=25)
     plt.yticks(fontsize=20)
-    plt.ylabel('Kagome angle (degrees)', fontsize=25)
+    plt.ylabel(r'$\theta_{Kagome}$ (degrees)', fontsize=25)
     plt.savefig(job.fn("kagome_angle.png"), dpi=500)
     return
 
@@ -227,7 +247,7 @@ def voro_diagram(job):
         interval=500,
         repeat=False
     )
-    ani.save('voro.mp4', fps=int(DISPLAY_FRAMES/10), dpi=100)
+    ani.save(job.fn('voro.mp4'), fps=int(DISPLAY_FRAMES/10), dpi=100)
 
 @Project.operation
 @Project.pre.isfile(TRAJECTORY_FN)
@@ -238,7 +258,7 @@ def plot_average_katic(job):
     chosen_frame, k_atic = get_frame_and_katic(job)
     averaged_katics = []
 
-    timesteps = np.linspace(0, (len(trajectory)-1)*job.doc.thermo_period, len(trajectory))
+    timesteps = np.linspace(0, (len(trajectory)-1)*job.doc.gsd_period, len(trajectory))
     for i in chosen_frame:
         for k in k_atic:
             frame = trajectory[i]
@@ -268,7 +288,7 @@ def plot_average_katic(job):
     plt.xticks(fontsize=20)
     plt.ylabel(fr"$\psi'_{3}$", fontsize=25)
     plt.yticks(fontsize=20)
-    plt.savefig("mean_katic.png", dpi=100)
+    plt.savefig(job.fn("mean_katic.png"), dpi=100)
 
 def compute_kagome_angle(job, frame):
     import freud
