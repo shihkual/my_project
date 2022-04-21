@@ -33,6 +33,7 @@ class Project(flow.FlowProject):
         flow.FlowProject.__init__(self)
 
 @Project.operation
+@Project.pre(lambda job: job.doc.get(f"{LABEL}_done", False))
 @Project.pre.isfile(f'{LABEL}_hpmc_potential.txt')
 @Project.pre.isfile(f'{LABEL}_box.txt')
 # @Project.post.isfile('potential.png')
@@ -102,6 +103,7 @@ def plot_potential(job):
     return
 
 @Project.operation
+@Project.pre(lambda job: job.doc.get(f"{LABEL}_done", False))
 @Project.pre.isfile(f'{LABEL}_hpmc_potential.txt')
 @Project.pre.isfile(f'{LABEL}_box.txt')
 # @Project.post.isfile('box_geometry.png')
@@ -155,6 +157,7 @@ def plot_box(job):
     return
 
 @Project.operation
+@Project.pre(lambda job: job.doc.get(f"{LABEL}_done", False))
 @Project.pre.isfile(f'{LABEL}_hpmc_potential.txt')
 @Project.pre.isfile(f'{LABEL}_box.txt')
 @Project.pre.isfile(TRAJECTORY_FN)
@@ -197,6 +200,7 @@ def plot_kagome_angle(job):
     return
 
 @Project.operation
+@Project.pre(lambda job: job.doc.get(f"{LABEL}_done", False))
 @Project.pre.isfile(TRAJECTORY_FN)
 # @Project.post.isfile('voro.mp4')
 @directives(memory='4096m')
@@ -250,6 +254,7 @@ def voro_diagram(job):
     ani.save(job.fn('voro.mp4'), fps=int(DISPLAY_FRAMES/10), dpi=100)
 
 @Project.operation
+@Project.pre(lambda job: job.doc.get(f"{LABEL}_done", False))
 @Project.pre.isfile(TRAJECTORY_FN)
 # @Project.post.isfile('mean_katic.png')
 @directives(walltime=0.5)
