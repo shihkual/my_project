@@ -80,6 +80,7 @@ def plot_potential(job):
         ax2.set_ylabel('Box volume', fontsize=25, color='b')   
         plt.yticks(fontsize=20)
     if plot_temp:
+        import hoomd
         temperature_ramp = hoomd.variant.Ramp(
             A=job.sp.kT_init,
             B=job.sp.kT_end,
