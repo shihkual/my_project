@@ -1,5 +1,6 @@
 import gsd.hoomd
 import numpy as np
+import freud
 import signac
 import os
 
@@ -34,7 +35,6 @@ def render(job):
     import rowan
     import fresnel
     import matplotlib.pyplot as plt
-    import freud
 
     plt.ioff()
     trajectory = gsd.hoomd.open(job.fn(TRAJECTORY_FN))
@@ -98,7 +98,6 @@ def render(job):
 @directives(memory='4G')
 def render_with_katic(job):
     import rowan
-    import freud
     import fresnel
     import matplotlib.pyplot as plt
     import matplotlib.colors as clrs
