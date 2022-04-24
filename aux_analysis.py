@@ -87,7 +87,7 @@ def plot_potential(job):
             t_start=int(job.doc.tramp_end*0.05),
             t_ramp=int(job.doc.tramp_end*0.95)
         )
-        temperature = [temperature_ramp(i) for i in timesteps]
+        temperature = [temperature_ramp(int(i)) for i in timesteps]
         ax2 = ax.twinx()
         ax2.plot(
             timesteps,
