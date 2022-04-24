@@ -90,7 +90,7 @@ def render(job):
         interval=500,
         repeat=False
     )
-    ani.save(job.fn('{LABEL}_traj_movie.mp4'), fps=int(DISPLAY_FRAMES / 10), dpi=300)
+    ani.save(job.fn(f'{LABEL}_traj_movie.mp4'), fps=int(DISPLAY_FRAMES / 10), dpi=300)
 
 @Project.operation
 @Project.pre.isfile(TRAJECTORY_FN)
@@ -176,7 +176,7 @@ def render_with_katic(job):
         interval=500,
         repeat=False
     )
-    ani.save(job.fn('{LABEL}_traj_katic_movie.mp4'), fps=int(DISPLAY_FRAMES / 10), dpi=300)
+    ani.save(job.fn(f'{LABEL}_traj_katic_movie.mp4'), fps=int(DISPLAY_FRAMES / 10), dpi=300)
 
 if __name__ == "__main__":
     Project().main()
