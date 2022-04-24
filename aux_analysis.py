@@ -99,7 +99,7 @@ def plot_potential(job):
         ax2.set_ylabel('Temperature', fontsize=25, color='b')   
         plt.yticks(fontsize=20)
 
-    plt.savefig(job.fn("potential.png"), dpi=500)
+    plt.savefig(job.fn("{LABEL}_potential.png"), dpi=500)
     return
 
 @Project.operation
@@ -153,7 +153,7 @@ def plot_box(job):
     else:
         ax.set_ylim([job.sp.strain * 100 - 0.5, 0.5])
         ax2.set_ylim([job.sp.strain * 100 - 0.5, 0.5])
-    plt.savefig(job.fn("box_geometry.png"), dpi=500)
+    plt.savefig(job.fn("{LABEL}_box_geometry.png"), dpi=500)
     return
 
 @Project.operation
@@ -196,7 +196,7 @@ def plot_kagome_angle(job):
     plt.xlabel('HPMC sweeps', fontsize=25)
     plt.yticks(fontsize=20)
     plt.ylabel(r'$\theta_{Kagome}$ (degrees)', fontsize=25)
-    plt.savefig(job.fn("kagome_angle.png"), dpi=500)
+    plt.savefig(job.fn("{LABEL}_kagome_angle.png"), dpi=500)
     return
 
 @Project.operation
@@ -251,7 +251,7 @@ def voro_diagram(job):
         interval=500,
         repeat=False
     )
-    ani.save(job.fn('voro.mp4'), fps=int(DISPLAY_FRAMES/10), dpi=100)
+    ani.save(job.fn('{LABEL}_voro.mp4'), fps=int(DISPLAY_FRAMES/10), dpi=100)
 
 @Project.operation
 @Project.pre(lambda job: job.doc.get(f"{LABEL}_done", False))
@@ -293,7 +293,7 @@ def plot_average_katic(job):
     plt.xticks(fontsize=20)
     plt.ylabel(fr"$\psi'_{3}$", fontsize=25)
     plt.yticks(fontsize=20)
-    plt.savefig(job.fn("mean_katic.png"), dpi=100)
+    plt.savefig(job.fn("{LABEL}_mean_katic.png"), dpi=100)
 
 def compute_kagome_angle(job, frame):
     import freud
