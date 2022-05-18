@@ -1,0 +1,56 @@
+from scipy.spatial import ConvexHull
+import gsd.hoomd
+import numpy as np
+
+angle = [60, 80, 100, 120]
+
+def get_hexagon(length):
+    '''
+    Figure out the configuration of patchy polygons
+    The function will return a tuple of (Area of polygons, vectors
+    of vertices, vectors of patch locations)
+    '''
+    n_e = 6
+    xs = length * np.array([np.cos(n * 2 * np.pi / n_e) for n in range(n_e)])
+    ys = length * np.array([np.sin(n * 2 * np.pi / n_e) for n in range(n_e)])
+    zs = np.zeros_like(ys)
+    vertices = np.vstack((xs, ys, zs)).T
+    vertices = vertices - np.mean(vertices, axis=0)
+    return vertices
+
+def find_overlap_idx(target_position, convexhull, tolerance=1e-9):
+    in_idx = np.arange(target_position.shape[0])
+    for plane in convexhull.equations:
+        truth = (np.dot(
+            target_position[in_idx, 0:2],
+            np.reshape(plane[0:2], (2, 1))) + plane[2] <= tolerance).flatten()
+        in_idx = in_idx[truth]
+    return in_idx
+
+for i in angle:
+    orig_traj = gsd.hoomd.open(f'kagome_{i}.gsd')
+    frame = orig_traj[0]
+    position = frame.particles.position
+    target_position = get_hexagon(frame.configuration.box[0]/2)
+
+    overlap_with_seed_idx = find_overlap_idx(
+        position,
+        ConvexHull(1.05 * target_position[:, :2])
+    )
+
+    new_position = position[overlap_with_seed_idx, :]
+    new_orientation = frame.particles.orientation[overlap_with_seed_idx, :]
+    new_typeid = frame.particles.typeid[overlap_with_seed_idx]
+    N = new_position.shape[0]
+
+    snapshot = gsd.hoomd.Snapshot()
+    snapshot.particles.N = N
+    snapshot.particles.position = new_position
+    snapshot.particles.orientation = new_orientation
+    snapshot.particles.typeid = new_typeid
+    snapshot.particles.types = frame.particles.types
+    snapshot.particles.type_shapes = frame.particles.type_shapes
+    snapshot.configuration.box = frame.configuration.box
+
+    with gsd.hoomd.open(name=f'kagome_{i}_hex.gsd', mode='wb') as f:
+        f.append(snapshot)
